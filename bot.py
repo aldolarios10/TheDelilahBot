@@ -157,10 +157,16 @@ async def enviar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, t
     return primer_mensaje
 
 
-db.init_db()  # crea las tablas si no existen
+def main():
+    """Arranca el bot. Solo se ejecuta al correr `python bot.py`, no al importar este archivo."""
+    db.init_db()  # crea las tablas si no existen
 
-app = ApplicationBuilder().token(TOKEN).post_init(registrar_comandos).build()
-app.add_handler(CommandHandler("start", start))                                # responde a /start
-app.add_handler(CommandHandler("new", nueva))                                  # empieza otra conversación
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, preguntar))    # responde a mensajes de texto
-app.run_polling()
+    app = ApplicationBuilder().token(TOKEN).post_init(registrar_comandos).build()
+    app.add_handler(CommandHandler("start", start))                                # responde a /start
+    app.add_handler(CommandHandler("new", nueva))                                  # empieza otra conversación
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, preguntar))    # responde a mensajes de texto
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
