@@ -5,6 +5,7 @@ import os
 import logging
 from dotenv import load_dotenv
 import db
+from telegram_rich import enviar_rich, RICH_LIMIT
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -87,22 +88,37 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         respuesta_ia = opcion.message.content or "(empty answer)"
         texto = respuesta_ia
         if opcion.finish_reason == "length":  # la respuesta se cortó por llegar al tope
-            texto += "\n\n[...] (answer cut off: too long)"
+            texto += "\n\n*[...] answer cut off: too long*"
     except Exception:
         # Si la IA falla no se guarda nada, para que el historial no quede con preguntas sin respuesta
         logging.exception("Error al llamar a Groq")
         await update.message.reply_text("Sorry, something went wrong. Please try again later.")
         return
 
-    # Si la respuesta es muy larga, se manda en varios mensajes; se guarda el id del primero
+    enviado = await enviar_respuesta(update, context, texto)
+
+    # Se guardan la pregunta y la respuesta (sin la nota de "cut off", que no es de la IA)
+    db.save_message(conversacion_id, "user", pregunta, update.message.message_id)
+    db.save_message(conversacion_id, "assistant", respuesta_ia, enviado.message_id)
+
+
+async def enviar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, texto):
+    """Manda la respuesta como rich message (con formato). Si falla, la manda como texto normal.
+
+    Devuelve el mensaje enviado (o el primero, si se dividió) para guardar su id.
+    """
+    if len(texto) <= RICH_LIMIT:
+        try:
+            return await enviar_rich(context.bot, update.effective_chat.id, texto)
+        except Exception:
+            logging.exception("Falló sendRichMessage; se manda como texto normal")
+
+    # Respaldo: texto normal, dividido en mensajes de máximo 4096 caracteres
     primer_mensaje = None
     for i in range(0, len(texto), TELEGRAM_LIMIT):
         enviado = await update.message.reply_text(texto[i:i + TELEGRAM_LIMIT])
         primer_mensaje = primer_mensaje or enviado
-
-    # Se guardan la pregunta y la respuesta (sin la nota de "cut off", que no es de la IA)
-    db.save_message(conversacion_id, "user", pregunta, update.message.message_id)
-    db.save_message(conversacion_id, "assistant", respuesta_ia, primer_mensaje.message_id)
+    return primer_mensaje
 
 
 db.init_db()  # crea las tablas si no existen
