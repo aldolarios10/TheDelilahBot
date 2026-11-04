@@ -53,7 +53,7 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
                         └───────── history, profile, mistakes ────┘
 ```
 
-**Current state:** the bot answers with AI and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). The tutor format, user profile and mistake tracking are still pending.
+**Current state:** the bot answers with AI and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The tutor format, user profile and mistake tracking are still pending.
 
 Planned message flow:
 
@@ -71,7 +71,8 @@ Planned message flow:
 | Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (text messages only) |
 | Configuration | `.env` file loaded with `python-dotenv` (see [Environment variables](#environment-variables)) | ✅ Working |
 | Commands menu | Registered with `set_my_commands` on startup | ✅ Working (`/new`, `/start`) |
-| AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (with conversation history) |
+| AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (with conversation history and streaming) |
+| Rich formatting and live typing | Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage) (Bot API 10.1+), managed in `telegram_rich.py` | ✅ Working (with plain text fallback) |
 | Database: conversations and messages | SQLite (`delilah.db`), managed in `db.py` | ✅ Working |
 | Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
 | Tutor format (Reply / Correction / Explanation) | Prompt for the AI model | ⏳ Pending |
@@ -94,6 +95,23 @@ The commands appear in Telegram's **☰ Menu** button (next to the text box) and
 - **Errors aren't saved.** If the AI fails, nothing is stored, so you can just send your message again.
 
 The database is the file `delilah.db`, created automatically next to `db.py` the first time the bot runs. It's ignored by git, so your conversations are never uploaded.
+
+## Formatting and streaming
+
+AI models write in Markdown (`**bold**`, `# headings`, lists, tables). Regular Telegram messages don't understand that syntax and show the asterisks as they are, so the bot uses Telegram's **Rich Messages** instead, which render Markdown natively.
+
+How an answer is sent:
+
+1. The bot asks Groq for the answer in **streaming** mode, so the text arrives in small pieces.
+2. While it arrives, the bot shows it as a **draft** (`sendRichMessageDraft`): you see the answer being typed in real time. Drafts are updated at most once per second (`DRAFT_INTERVAL` in `bot.py`).
+3. When the answer is complete, the bot sends the **final message** (`sendRichMessage`). Drafts are temporary, so this is the message that stays in the chat and is saved in the database.
+
+Notes:
+
+- **Drafts only work in private chats.** In groups, the bot just sends the final message.
+- **Fallbacks:** if a draft fails, the bot stops sending drafts for that answer but still sends the final message. If the final rich message fails, the answer is sent as plain text (split into 4096-character messages). Errors are logged in the console.
+- **Library support:** `python-telegram-bot` doesn't include Rich Messages yet, so `telegram_rich.py` calls them with `do_api_request`, the library's way to use newer Bot API methods.
+- **Telegram app:** Rich Messages are recent (Bot API 10.1, June 2026), so keep your Telegram app updated.
 
 ## Setup
 
