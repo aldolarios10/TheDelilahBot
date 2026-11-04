@@ -47,13 +47,13 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────┐
 │ Telegram │ ──▶ │   bot.py     │ ──▶ │   AI model     │     │ Database │
-│  (user)  │ ◀── │ (Python bot) │ ◀── │  (Groq)        │     │(pending) │
+│  (user)  │ ◀── │ (Python bot) │ ◀── │  (Groq)        │     │ (SQLite) │
 └──────────┘     └──────┬───────┘     └────────────────┘     └────▲─────┘
                         │                                         │
                         └───────── history, profile, mistakes ────┘
 ```
 
-**Current state:** the bot already answers with AI, but with no memory. Each message is sent to Groq on its own (one question, one answer), without history or tutor format.
+**Current state:** the bot answers with AI and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). The tutor format, user profile and mistake tracking are still pending.
 
 Planned message flow:
 
@@ -70,9 +70,30 @@ Planned message flow:
 |---|---|---|
 | Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (text messages only) |
 | Configuration | `.env` file loaded with `python-dotenv` (see [Environment variables](#environment-variables)) | ✅ Working |
-| AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (single question → answer, no memory) |
+| Commands menu | Registered with `set_my_commands` on startup | ✅ Working (`/new`, `/start`) |
+| AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (with conversation history) |
+| Database: conversations and messages | SQLite (`delilah.db`), managed in `db.py` | ✅ Working |
+| Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
 | Tutor format (Reply / Correction / Explanation) | Prompt for the AI model | ⏳ Pending |
-| Database (history, profile, mistakes) | To be decided | ⏳ Pending |
+
+## Commands
+
+The commands appear in Telegram's **☰ Menu** button (next to the text box) and as suggestions when you type `/`.
+
+| Command | What it does |
+|---|---|
+| `/new` | Starts a new conversation. The previous one stays saved, but it's no longer sent to the AI. |
+| `/start` | Shows the welcome message. |
+
+## Conversations
+
+- **Each chat is separate.** Every Telegram chat has its own conversations; they never mix.
+- **One active conversation per chat.** Normal messages go to the active conversation. If there isn't one, it's created automatically.
+- **Resume an old conversation with a reply.** Reply (swipe or long-press → *Reply*) to an old message, and the bot continues *that* conversation. It becomes the active one, so your next messages go there too.
+- **Limited context.** Only the last `HISTORY_LIMIT` messages (default 10) are sent to the AI, to stay under the free tier's token limits. Older messages stay saved in the database.
+- **Errors aren't saved.** If the AI fails, nothing is stored, so you can just send your message again.
+
+The database is the file `delilah.db`, created automatically next to `db.py` the first time the bot runs. It's ignored by git, so your conversations are never uploaded.
 
 ## Setup
 
@@ -100,6 +121,7 @@ TOKEN=your-telegram-bot-token
 GROQ_API_KEY=your-groq-api-key
 GROQ_MODEL=llama-3.3-70b-versatile
 MAX_TOKENS=800
+HISTORY_LIMIT=10
 ```
 
 | Variable | Required | Description |
@@ -108,5 +130,6 @@ MAX_TOKENS=800
 | `GROQ_API_KEY` | Yes | Groq API key, from [console.groq.com/keys](https://console.groq.com/keys) (free, no card needed). |
 | `GROQ_MODEL` | Yes | Groq chat model to use, e.g. `llama-3.3-70b-versatile`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b`. Don't use `guard`, `whisper` or `tts` models: they can't chat. |
 | `MAX_TOKENS` | No (default `800`) | Max length of each answer, in tokens. Keeps requests under the free tier's per-minute limits. If an answer reaches it, the bot adds a "cut off" note. |
+| `HISTORY_LIMIT` | No (default `10`) | How many previous messages of the conversation are sent to the AI as context. Higher means better memory but more tokens per request. |
 
 The bot reads `.env` only when it starts, so restart it after any change.
