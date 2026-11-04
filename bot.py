@@ -2,10 +2,11 @@ from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 from groq import AsyncGroq
 import os
+import time
 import logging
 from dotenv import load_dotenv
 import db
-from telegram_rich import enviar_rich, RICH_LIMIT
+from telegram_rich import enviar_rich, enviar_borrador, RICH_LIMIT
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -24,6 +25,7 @@ groq = AsyncGroq(api_key=GROQ_API_KEY)
 
 SYSTEM_PROMPT = "You are a helpful assistant. Always answer in English, clearly and concisely."
 TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
+DRAFT_INTERVAL = 1.0   # segundos mínimos entre borradores (para no saturar a Telegram)
 
 # Comandos que aparecen en el botón "Menu" de Telegram (y como sugerencias al escribir "/")
 COMANDOS = [
@@ -75,19 +77,10 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     historial = db.get_history(conversacion_id, HISTORY_LIMIT)
 
     try:
-        respuesta = await groq.chat.completions.create(
-            model=GROQ_MODEL,
-            max_tokens=MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                *historial,
-                {"role": "user", "content": pregunta},
-            ],
-        )
-        opcion = respuesta.choices[0]
-        respuesta_ia = opcion.message.content or "(empty answer)"
+        respuesta_ia, cortada = await generar_respuesta(update, context, historial, pregunta)
+        respuesta_ia = respuesta_ia or "(empty answer)"
         texto = respuesta_ia
-        if opcion.finish_reason == "length":  # la respuesta se cortó por llegar al tope
+        if cortada:  # la respuesta se cortó por llegar al tope de MAX_TOKENS
             texto += "\n\n*[...] answer cut off: too long*"
     except Exception:
         # Si la IA falla no se guarda nada, para que el historial no quede con preguntas sin respuesta
@@ -100,6 +93,49 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Se guardan la pregunta y la respuesta (sin la nota de "cut off", que no es de la IA)
     db.save_message(conversacion_id, "user", pregunta, update.message.message_id)
     db.save_message(conversacion_id, "assistant", respuesta_ia, enviado.message_id)
+
+
+async def generar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, historial, pregunta):
+    """Pide la respuesta a Groq por pedacitos (streaming) y la va mostrando como borrador.
+
+    Devuelve (texto completo, se_cortó). Si Groq falla, lanza la excepción.
+    """
+    stream = await groq.chat.completions.create(
+        model=GROQ_MODEL,
+        max_tokens=MAX_TOKENS,
+        stream=True,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *historial,
+            {"role": "user", "content": pregunta},
+        ],
+    )
+
+    chat_id = update.effective_chat.id
+    usar_borradores = update.effective_chat.type == "private"  # Telegram solo los permite en privado
+    draft_id = update.message.message_id  # nunca es 0 y es distinto para cada pregunta
+    ultimo_borrador = 0.0
+    texto = ""
+    cortada = False
+
+    async for chunk in stream:
+        if not chunk.choices:  # algunos pedazos solo traen estadísticas, sin texto
+            continue
+        opcion = chunk.choices[0]
+        texto += opcion.delta.content or ""
+        if opcion.finish_reason == "length":
+            cortada = True
+
+        # Se manda un borrador como máximo cada DRAFT_INTERVAL segundos
+        if usar_borradores and texto and time.monotonic() - ultimo_borrador >= DRAFT_INTERVAL:
+            try:
+                await enviar_borrador(context.bot, chat_id, draft_id, texto)
+            except Exception:
+                logging.exception("Falló sendRichMessageDraft; se sigue sin borradores")
+                usar_borradores = False
+            ultimo_borrador = time.monotonic()
+
+    return texto, cortada
 
 
 async def enviar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, texto):

@@ -10,6 +10,23 @@ from telegram import Message
 RICH_LIMIT = 32768  # máximo de caracteres en un rich message
 
 
+async def enviar_borrador(bot, chat_id, draft_id, markdown):
+    """Muestra `markdown` como borrador que se está escribiendo (solo chats privados).
+
+    El borrador es temporal (~30 s) y no se queda en el chat: al terminar hay que mandar
+    el mensaje definitivo con enviar_rich(). Usar el mismo `draft_id` hace que Telegram
+    anime los cambios como si el texto se estuviera escribiendo.
+    """
+    await bot.do_api_request(
+        "sendRichMessageDraft",
+        api_kwargs={
+            "chat_id": chat_id,
+            "draft_id": draft_id,
+            "rich_message": {"markdown": markdown[:RICH_LIMIT]},
+        },
+    )
+
+
 async def enviar_rich(bot, chat_id, markdown):
     """Manda `markdown` como rich message (Telegram interpreta **negritas**, listas, tablas, etc.).
 
