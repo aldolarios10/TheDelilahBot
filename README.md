@@ -1,0 +1,90 @@
+# TheDelilahBot
+
+An English tutor that lives in a Telegram bot: you chat with it like any other contact, it replies in English and, in every message, corrects your mistakes and explains them so you can improve your written English.
+
+> **Language policy:** the bot uses English only. Replies, corrections and explanations are all in English.
+
+---
+
+## The idea
+
+Learning written English takes constant practice, and practice works best when it's a real conversation rather than an isolated exercise.
+
+The tutor isn't just a proofreader. It's a conversation partner that **remembers** what we've talked about, brings up earlier topics again and adapts to my level.
+
+## How it works (concept)
+
+1. I send the tutor a message in English on Telegram.
+2. The tutor answers in three parts:
+   - **Reply:** its response to the conversation, in simple English suited to my level, ending with a question to keep the chat going.
+   - **Correction:** my message rewritten correctly (or a compliment if it had no mistakes).
+   - **Explanation:** a short explanation in English of each mistake: what was wrong and why.
+3. The whole conversation is saved, so the tutor has context and can pick up topics again in later messages.
+
+### Example
+
+> **Me:** Yesterday I go to the cinema with my friends and we watch a horror movie.
+>
+> **Tutor:**
+>
+> *Reply:* That sounds fun! Horror movies are exciting. Were you scared? What was the name of the movie?
+>
+> *Correction:* Yesterday I **went** to the cinema with my friends and we **watched** a horror movie.
+>
+> *Explanation:* You're talking about something that happened yesterday, so the verbs must be in the past tense: "go" → "went" (irregular verb) and "watch" → "watched" (regular verb, add *-ed*).
+
+## Planned features
+
+- 💬 **Natural conversation** in English, on any topic.
+- ✍️ **Feedback on every message:** correction and explanation, in English.
+- 🧠 **Memory and history:** the tutor remembers past conversations and who I am (interests, topics, job).
+- 📊 **Mistake tracking:** a log of my mistakes to find the most frequent ones.
+- 🔁 **Reviews:** a periodic summary of my common mistakes, with examples to practice.
+- 🎚️ **Adjustable level:** from A2 to B1, B2 and beyond as I improve.
+
+## Architecture (high level)
+
+```
+┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────┐
+│ Telegram │ ──▶ │   bot.py     │ ──▶ │   AI model     │     │ Database │
+│  (user)  │ ◀── │ (Python bot) │ ◀── │  (pending)     │     │(pending) │
+└──────────┘     └──────┬───────┘     └────────────────┘     └────▲─────┘
+                        │                                         │
+                        └───────── history, profile, mistakes ────┘
+```
+
+Message flow:
+
+1. The user sends a message on Telegram.
+2. `bot.py` receives it through the Telegram Bot API.
+3. The bot loads the user's recent history and profile from the database.
+4. It sends the message plus that context to the AI model, with instructions to answer in the *Reply / Correction / Explanation* format, in English only.
+5. It saves the new message, the answer and the detected mistakes to the database.
+6. It sends the answer back to the user on Telegram.
+
+### Components
+
+| Component | Technology | Status |
+|---|---|---|
+| Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (placeholder reply: "Hola mundo") |
+| Configuration | `.env` file loaded with `python-dotenv` (`TOKEN`) | ✅ Working |
+| AI model (tutor brain) | To be decided | ⏳ Pending |
+| Database (history, profile, mistakes) | To be decided | ⏳ Pending |
+
+## Setup
+
+```bash
+# 1. Create and activate a virtual environment
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS / Linux
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Create a .env file with your Telegram bot token (from @BotFather)
+echo TOKEN=your-telegram-bot-token > .env
+
+# 4. Run the bot
+python bot.py
+```
