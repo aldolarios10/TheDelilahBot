@@ -37,7 +37,10 @@ async def registrar_comandos(app):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hi! Send me any question and I'll answer it.")
+    await update.message.reply_text(
+        "Hi! Send me any question and I'll answer it.\n"
+        "I remember our conversation. Use /new (or the Menu button) to start a new one."
+    )
 
 
 async def nueva(update: Update, context: ContextTypes.DEFAULT_TYPE):
