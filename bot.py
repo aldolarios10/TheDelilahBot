@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 from groq import AsyncGroq
 import os
@@ -23,6 +23,17 @@ groq = AsyncGroq(api_key=GROQ_API_KEY)
 
 SYSTEM_PROMPT = "You are a helpful assistant. Always answer in English, clearly and concisely."
 TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
+
+# Comandos que aparecen en el botón "Menu" de Telegram (y como sugerencias al escribir "/")
+COMANDOS = [
+    BotCommand("new", "Start a new conversation"),
+    BotCommand("start", "Show the welcome message"),
+]
+
+
+async def registrar_comandos(app):
+    # Se ejecuta una vez al arrancar: le manda a Telegram la lista de comandos del menú
+    await app.bot.set_my_commands(COMANDOS)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,7 +104,7 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 db.init_db()  # crea las tablas si no existen
 
-app = ApplicationBuilder().token(TOKEN).build()
+app = ApplicationBuilder().token(TOKEN).post_init(registrar_comandos).build()
 app.add_handler(CommandHandler("start", start))                                # responde a /start
 app.add_handler(CommandHandler("new", nueva))                                  # empieza otra conversación
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, preguntar))    # responde a mensajes de texto
