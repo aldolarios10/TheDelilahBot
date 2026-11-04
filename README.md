@@ -47,13 +47,15 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────┐
 │ Telegram │ ──▶ │   bot.py     │ ──▶ │   AI model     │     │ Database │
-│  (user)  │ ◀── │ (Python bot) │ ◀── │  (pending)     │     │(pending) │
+│  (user)  │ ◀── │ (Python bot) │ ◀── │  (Groq)        │     │(pending) │
 └──────────┘     └──────┬───────┘     └────────────────┘     └────▲─────┘
                         │                                         │
                         └───────── history, profile, mistakes ────┘
 ```
 
-Message flow:
+**Current state:** the bot already answers with AI, but with no memory. Each message is sent to Groq on its own (one question, one answer), without history or tutor format.
+
+Planned message flow:
 
 1. The user sends a message on Telegram.
 2. `bot.py` receives it through the Telegram Bot API.
@@ -66,9 +68,10 @@ Message flow:
 
 | Component | Technology | Status |
 |---|---|---|
-| Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (placeholder reply: "Hola mundo") |
-| Configuration | `.env` file loaded with `python-dotenv` (`TOKEN`) | ✅ Working |
-| AI model (tutor brain) | To be decided | ⏳ Pending |
+| Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (text messages only) |
+| Configuration | `.env` file loaded with `python-dotenv` (see [Environment variables](#environment-variables)) | ✅ Working |
+| AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (single question → answer, no memory) |
+| Tutor format (Reply / Correction / Explanation) | Prompt for the AI model | ⏳ Pending |
 | Database (history, profile, mistakes) | To be decided | ⏳ Pending |
 
 ## Setup
@@ -82,9 +85,28 @@ venv\Scripts\activate        # Windows
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Create a .env file with your Telegram bot token (from @BotFather)
-echo TOKEN=your-telegram-bot-token > .env
+# 3. Create a .env file (see "Environment variables" below)
 
 # 4. Run the bot
 python bot.py
 ```
+
+## Environment variables
+
+Create a `.env` file in the project root (it's ignored by git, so your keys stay private):
+
+```
+TOKEN=your-telegram-bot-token
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=llama-3.3-70b-versatile
+MAX_TOKENS=800
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `TOKEN` | Yes | Telegram bot token, from [@BotFather](https://t.me/BotFather). |
+| `GROQ_API_KEY` | Yes | Groq API key, from [console.groq.com/keys](https://console.groq.com/keys) (free, no card needed). |
+| `GROQ_MODEL` | Yes | Groq chat model to use, e.g. `llama-3.3-70b-versatile`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b`. Don't use `guard`, `whisper` or `tts` models: they can't chat. |
+| `MAX_TOKENS` | No (default `800`) | Max length of each answer, in tokens. Keeps requests under the free tier's per-minute limits. If an answer reaches it, the bot adds a "cut off" note. |
+
+The bot reads `.env` only when it starts, so restart it after any change.
