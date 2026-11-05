@@ -48,7 +48,8 @@ async def registrar_comandos(app):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hi! Send me any question and I'll answer it.\n"
+        "Hi! I'm Delilah, your English tutor. 👋\n"
+        "Write to me in English about anything, and I'll help you improve.\n"
         "I remember our conversation. Use /new (or the Menu button) to start a new one."
     )
 
