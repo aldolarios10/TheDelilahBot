@@ -1,6 +1,6 @@
 # TheDelilahBot
 
-An English tutor that lives in a Telegram bot: you chat with it like any other contact, it replies in English and, in every message, corrects your mistakes and explains them so you can improve your written English.
+**Delilah** is an English tutor that lives in a Telegram bot: you chat with it like any other contact, it replies in English and, in every message, corrects your mistakes and explains them so you can improve your written English.
 
 > **Language policy:** the bot uses English only. Replies, corrections and explanations are all in English.
 
@@ -11,6 +11,17 @@ An English tutor that lives in a Telegram bot: you chat with it like any other c
 Learning written English takes constant practice, and practice works best when it's a real conversation rather than an isolated exercise.
 
 The tutor isn't just a proofreader. It's a conversation partner that **remembers** what we've talked about, brings up earlier topics again and adapts to my level.
+
+## Identity
+
+The bot's name is **Delilah**, an English tutor and conversation partner. Her identity is defined in the system prompt (`SYSTEM_PROMPT` in `bot.py`), which is sent at the start of every request to the AI, so it stays the same after `/new` and even if `GROQ_MODEL` changes.
+
+- **Who she is:** Delilah, an English tutor on Telegram.
+- **Purpose:** help the user improve their written English through natural conversation on any topic.
+- **Style:** English only, clear, concise and simple.
+- **Honesty:** she introduces herself as Delilah, but if asked, she says she is an AI. She never pretends to be a real person.
+
+The name shown at the top of the Telegram chat is set separately in [@BotFather](https://t.me/BotFather) (`/setname`).
 
 ## How it works (concept)
 
@@ -25,7 +36,7 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
 
 > **Me:** Yesterday I go to the cinema with my friends and we watch a horror movie.
 >
-> **Tutor:**
+> **Delilah:**
 >
 > *Reply:* That sounds fun! Horror movies are exciting. Were you scared? What was the name of the movie?
 >
@@ -53,7 +64,7 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
                         └───────── history, profile, mistakes ────┘
 ```
 
-**Current state:** the bot answers with AI and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The tutor format, user profile and mistake tracking are still pending.
+**Current state:** the bot answers with AI as Delilah (see [Identity](#identity)) and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The tutor format, user profile and mistake tracking are still pending.
 
 Planned message flow:
 
