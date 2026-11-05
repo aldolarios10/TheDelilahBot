@@ -77,6 +77,37 @@ Planned message flow:
 | Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
 | Tutor format (Reply / Correction / Explanation) | Prompt for the AI model | ⏳ Pending |
 
+### Project structure
+
+Current files:
+
+| File | What it does |
+|---|---|
+| `bot.py` | Configuration, Telegram handlers, Groq calls (streaming) and bot startup (`main()`) |
+| `db.py` | SQLite database: conversations and messages |
+| `telegram_rich.py` | Telegram Rich Messages and drafts (via `do_api_request`) |
+
+**Planned layout (layers).** Before adding the tutor features, the code will be reorganized by responsibility. MVC isn't used because a bot has no views of its own (Telegram is the interface), and `python-telegram-bot` already acts as the framework.
+
+```
+TheDelilahBot/
+├── main.py              ← starts the bot (registers handlers, run_polling)
+├── config.py            ← reads .env (TOKEN, GROQ_MODEL, MAX_TOKENS, ...)
+├── handlers/            ← Telegram side: receives messages and replies
+│   ├── commands.py      ← /start, /new (later /level, /review)
+│   └── messages.py      ← text messages
+├── services/            ← logic, knows nothing about Telegram
+│   ├── ai.py            ← Groq calls and streaming
+│   └── tutor.py         ← tutor prompt, mistake detection (future)
+├── storage/
+│   └── db.py            ← database
+└── telegram_rich.py     ← Rich Messages helpers
+```
+
+- **handlers** only translate between Telegram and the rest of the code.
+- **services** hold the logic, so they can be reused if the messaging platform ever changes.
+- **storage** saves and reads data.
+
 ## Commands
 
 The commands appear in Telegram's **☰ Menu** button (next to the text box) and as suggestions when you type `/`.
