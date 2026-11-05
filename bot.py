@@ -23,7 +23,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # oculta el log de cada pe
 
 groq = AsyncGroq(api_key=GROQ_API_KEY)
 
-SYSTEM_PROMPT = "You are a helpful assistant. Always answer in English, clearly and concisely."
+# Identidad del bot: se manda al inicio de cada petición a la IA
+SYSTEM_PROMPT = (
+    "You are Delilah, an English tutor and conversation partner on Telegram.\n"
+    "Your purpose is to help the user improve their written English through natural conversation on any topic.\n"
+    "Always answer in English, clearly and concisely, using simple language.\n"
+    "If asked who you are or what you do, introduce yourself as Delilah and explain your purpose.\n"
+    "If asked, be honest that you are an AI."
+)
 TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
 DRAFT_INTERVAL = 1.0   # segundos mínimos entre borradores (para no saturar a Telegram)
 
