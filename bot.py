@@ -1,22 +1,14 @@
 from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 from groq import AsyncGroq
-import os
 import time
 import logging
-from dotenv import load_dotenv
+import config
+from config import (
+    TOKEN, GROQ_API_KEY, GROQ_MODEL, MAX_TOKENS, HISTORY_LIMIT, TELEGRAM_LIMIT, DRAFT_INTERVAL,
+)
 import db
 from telegram_rich import enviar_rich, enviar_borrador, RICH_LIMIT
-
-load_dotenv()
-TOKEN = os.getenv("TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL")
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "800"))  # tope de tokens por respuesta (cualquier modelo)
-HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", "10"))  # mensajes anteriores que se mandan a la IA
-
-if not TOKEN or not GROQ_API_KEY or not GROQ_MODEL:
-    raise SystemExit("Falta TOKEN, GROQ_API_KEY o GROQ_MODEL en el archivo .env")
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)  # oculta el log de cada petición HTTP
@@ -31,8 +23,6 @@ SYSTEM_PROMPT = (
     "If asked who you are or what you do, introduce yourself as Delilah and explain your purpose.\n"
     "If asked, be honest that you are an AI."
 )
-TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
-DRAFT_INTERVAL = 1.0   # segundos mínimos entre borradores (para no saturar a Telegram)
 
 # Comandos que aparecen en el botón "Menu" de Telegram (y como sugerencias al escribir "/")
 COMANDOS = [
@@ -167,6 +157,7 @@ async def enviar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, t
 
 def main():
     """Arranca el bot. Solo se ejecuta al correr `python bot.py`, no al importar este archivo."""
+    config.validar()  # se detiene si falta algo en el .env
     db.init_db()  # crea las tablas si no existen
 
     app = ApplicationBuilder().token(TOKEN).post_init(registrar_comandos).build()
