@@ -1,28 +1,16 @@
 from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
-from groq import AsyncGroq
 import time
 import logging
 import config
-from config import (
-    TOKEN, GROQ_API_KEY, GROQ_MODEL, MAX_TOKENS, HISTORY_LIMIT, TELEGRAM_LIMIT, DRAFT_INTERVAL,
-)
+from config import TOKEN, HISTORY_LIMIT, TELEGRAM_LIMIT, DRAFT_INTERVAL
 from storage import db
+from services import ai, tutor
+from services.conversations import elegir_conversacion
 from telegram_rich import enviar_rich, enviar_borrador, RICH_LIMIT
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)  # oculta el log de cada petición HTTP
-
-groq = AsyncGroq(api_key=GROQ_API_KEY)
-
-# Identidad del bot: se manda al inicio de cada petición a la IA
-SYSTEM_PROMPT = (
-    "You are Delilah, an English tutor and conversation partner on Telegram.\n"
-    "Your purpose is to help the user improve their written English through natural conversation on any topic.\n"
-    "Always answer in English, clearly and concisely, using simple language.\n"
-    "If asked who you are or what you do, introduce yourself as Delilah and explain your purpose.\n"
-    "If asked, be honest that you are an AI."
-)
 
 # Comandos que aparecen en el botón "Menu" de Telegram (y como sugerencias al escribir "/")
 COMANDOS = [
@@ -50,28 +38,15 @@ async def nueva(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Started a new conversation. What do you want to talk about?")
 
 
-def elegir_conversacion(update: Update):
-    """Devuelve el id de la conversación a la que va este mensaje.
-
-    Si el usuario respondió (reply) a un mensaje guardado, se retoma esa conversación
-    y queda activa. Si no, se usa la conversación activa del chat (o se crea una).
-    """
-    chat_id = update.effective_chat.id
-    citado = update.message.reply_to_message
-    if citado:
-        conversacion_id = db.find_conversation_by_message(chat_id, citado.message_id)
-        if conversacion_id:
-            db.activate_conversation(chat_id, conversacion_id)
-            return conversacion_id
-    return db.get_or_create_active_conversation(chat_id)
-
-
 async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Con memoria: se manda a la IA el historial de la conversación + la pregunta nueva
     pregunta = update.message.text
     await context.bot.send_chat_action(update.effective_chat.id, "typing")
 
-    conversacion_id = elegir_conversacion(update)
+    citado = update.message.reply_to_message
+    conversacion_id = elegir_conversacion(
+        update.effective_chat.id, citado.message_id if citado else None
+    )
     historial = db.get_history(conversacion_id, HISTORY_LIMIT)
 
     try:
@@ -94,46 +69,29 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def generar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, historial, pregunta):
-    """Pide la respuesta a Groq por pedacitos (streaming) y la va mostrando como borrador.
+    """Pide la respuesta a la IA (services/ai.py) y la va mostrando como borrador en Telegram.
 
-    Devuelve (texto completo, se_cortó). Si Groq falla, lanza la excepción.
+    Devuelve (texto completo, se_cortó). Si la IA falla, lanza la excepción.
     """
-    stream = await groq.chat.completions.create(
-        model=GROQ_MODEL,
-        max_tokens=MAX_TOKENS,
-        stream=True,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            *historial,
-            {"role": "user", "content": pregunta},
-        ],
-    )
-
     chat_id = update.effective_chat.id
     usar_borradores = update.effective_chat.type == "private"  # Telegram solo los permite en privado
     draft_id = update.message.message_id  # nunca es 0 y es distinto para cada pregunta
     ultimo_borrador = 0.0
-    texto = ""
-    cortada = False
 
-    async for chunk in stream:
-        if not chunk.choices:  # algunos pedazos solo traen estadísticas, sin texto
-            continue
-        opcion = chunk.choices[0]
-        texto += opcion.delta.content or ""
-        if opcion.finish_reason == "length":
-            cortada = True
+    async def al_avanzar(texto):
+        # La IA avisa cada vez que llega un pedacito; aquí se decide si se manda un borrador
+        nonlocal usar_borradores, ultimo_borrador
+        if not usar_borradores or time.monotonic() - ultimo_borrador < DRAFT_INTERVAL:
+            return  # se manda un borrador como máximo cada DRAFT_INTERVAL segundos
+        try:
+            await enviar_borrador(context.bot, chat_id, draft_id, texto)
+        except Exception:
+            logging.exception("Falló sendRichMessageDraft; se sigue sin borradores")
+            usar_borradores = False
+        ultimo_borrador = time.monotonic()
 
-        # Se manda un borrador como máximo cada DRAFT_INTERVAL segundos
-        if usar_borradores and texto and time.monotonic() - ultimo_borrador >= DRAFT_INTERVAL:
-            try:
-                await enviar_borrador(context.bot, chat_id, draft_id, texto)
-            except Exception:
-                logging.exception("Falló sendRichMessageDraft; se sigue sin borradores")
-                usar_borradores = False
-            ultimo_borrador = time.monotonic()
-
-    return texto, cortada
+    mensajes = tutor.construir_mensajes(historial, pregunta)
+    return await ai.generar(mensajes, al_avanzar)
 
 
 async def enviar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, texto):
