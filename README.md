@@ -14,7 +14,7 @@ The tutor isn't just a proofreader. It's a conversation partner that **remembers
 
 ## Identity
 
-The bot's name is **Delilah**, an English tutor and conversation partner. Her identity is defined in the system prompt (`SYSTEM_PROMPT` in `bot.py`), which is sent at the start of every request to the AI, so it stays the same after `/new` and even if `GROQ_MODEL` changes.
+The bot's name is **Delilah**, an English tutor and conversation partner. Her identity is defined in the system prompt (`SYSTEM_PROMPT` in `services/tutor.py`), which is sent at the start of every request to the AI, so it stays the same after `/new` and even if `GROQ_MODEL` changes.
 
 - **Who she is:** Delilah, an English tutor on Telegram.
 - **Purpose:** help the user improve their written English through natural conversation on any topic.
@@ -57,7 +57,7 @@ The name shown at the top of the Telegram chat is set separately in [@BotFather]
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────┐
-│ Telegram │ ──▶ │   bot.py     │ ──▶ │   AI model     │     │ Database │
+│ Telegram │ ──▶ │   main.py    │ ──▶ │   AI model     │     │ Database │
 │  (user)  │ ◀── │ (Python bot) │ ◀── │  (Groq)        │     │ (SQLite) │
 └──────────┘     └──────┬───────┘     └────────────────┘     └────▲─────┘
                         │                                         │
@@ -69,7 +69,7 @@ The name shown at the top of the Telegram chat is set separately in [@BotFather]
 Planned message flow:
 
 1. The user sends a message on Telegram.
-2. `bot.py` receives it through the Telegram Bot API.
+2. The bot (`handlers/messages.py`) receives it through the Telegram Bot API.
 3. The bot loads the user's recent history and profile from the database.
 4. It sends the message plus that context to the AI model, with instructions to answer in the *Reply / Correction / Explanation* format, in English only.
 5. It saves the new message, the answer and the detected mistakes to the database.
@@ -84,40 +84,36 @@ Planned message flow:
 | Commands menu | Registered with `set_my_commands` on startup | ✅ Working (`/new`, `/start`) |
 | AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (with conversation history and streaming) |
 | Rich formatting and live typing | Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage) (Bot API 10.1+), managed in `telegram_rich.py` | ✅ Working (with plain text fallback) |
-| Database: conversations and messages | SQLite (`delilah.db`), managed in `db.py` | ✅ Working |
+| Database: conversations and messages | SQLite (`delilah.db`), managed in `storage/db.py` | ✅ Working |
 | Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
 | Tutor format (Reply / Correction / Explanation) | Prompt for the AI model | ⏳ Pending |
 
 ### Project structure
 
-Current files:
-
-| File | What it does |
-|---|---|
-| `bot.py` | Configuration, Telegram handlers, Groq calls (streaming) and bot startup (`main()`) |
-| `db.py` | SQLite database: conversations and messages |
-| `telegram_rich.py` | Telegram Rich Messages and drafts (via `do_api_request`) |
-
-**Planned layout (layers).** Before adding the tutor features, the code will be reorganized by responsibility. MVC isn't used because a bot has no views of its own (Telegram is the interface), and `python-telegram-bot` already acts as the framework.
+The code is organized in **layers**, by responsibility. MVC isn't used because a bot has no views of its own (Telegram is the interface), and `python-telegram-bot` already acts as the framework.
 
 ```
 TheDelilahBot/
-├── main.py              ← starts the bot (registers handlers, run_polling)
-├── config.py            ← reads .env (TOKEN, GROQ_MODEL, MAX_TOKENS, ...)
-├── handlers/            ← Telegram side: receives messages and replies
-│   ├── commands.py      ← /start, /new (later /level, /review)
-│   └── messages.py      ← text messages
-├── services/            ← logic, knows nothing about Telegram
-│   ├── ai.py            ← Groq calls and streaming
-│   └── tutor.py         ← tutor prompt, mistake detection (future)
+├── main.py                  ← starts the bot: python main.py
+├── config.py                ← reads .env, constants and validation
+├── handlers/                ← Telegram side: receives messages and replies
+│   ├── commands.py          ← /start, /new and the commands menu (later /level, /review)
+│   └── messages.py          ← text messages, live drafts, sending the answer
+├── services/                ← logic, knows nothing about Telegram
+│   ├── ai.py                ← Groq calls with streaming
+│   ├── tutor.py             ← Delilah's identity (SYSTEM_PROMPT) and messages for the AI
+│   └── conversations.py     ← which conversation a message belongs to (active or reply)
 ├── storage/
-│   └── db.py            ← database
-└── telegram_rich.py     ← Rich Messages helpers
+│   └── db.py                ← SQLite database: conversations and messages
+├── telegram_rich.py         ← Telegram Rich Messages and drafts (via do_api_request)
+└── delilah.db               ← the database file (created automatically, ignored by git)
 ```
 
 - **handlers** only translate between Telegram and the rest of the code.
-- **services** hold the logic, so they can be reused if the messaging platform ever changes.
+- **services** hold the logic, so they can be reused if the messaging platform ever changes. For example, `ai.py` reports progress through an `al_avanzar(texto)` callback, and the handler decides to show it as a Telegram draft.
 - **storage** saves and reads data.
+
+Each folder has an empty `__init__.py`, which marks it as a regular Python package.
 
 ## Commands
 
@@ -136,7 +132,7 @@ The commands appear in Telegram's **☰ Menu** button (next to the text box) and
 - **Limited context.** Only the last `HISTORY_LIMIT` messages (default 10) are sent to the AI, to stay under the free tier's token limits. Older messages stay saved in the database.
 - **Errors aren't saved.** If the AI fails, nothing is stored, so you can just send your message again.
 
-The database is the file `delilah.db`, created automatically next to `db.py` the first time the bot runs. It's ignored by git, so your conversations are never uploaded.
+The database is the file `delilah.db`, created automatically in the project root (`DB_PATH` in `config.py`) the first time the bot runs. It's ignored by git, so your conversations are never uploaded.
 
 ## Formatting and streaming
 
@@ -145,7 +141,7 @@ AI models write in Markdown (`**bold**`, `# headings`, lists, tables). Regular T
 How an answer is sent:
 
 1. The bot asks Groq for the answer in **streaming** mode, so the text arrives in small pieces.
-2. While it arrives, the bot shows it as a **draft** (`sendRichMessageDraft`): you see the answer being typed in real time. Drafts are updated at most once per second (`DRAFT_INTERVAL` in `bot.py`).
+2. While it arrives, the bot shows it as a **draft** (`sendRichMessageDraft`): you see the answer being typed in real time. Drafts are updated at most once per second (`DRAFT_INTERVAL` in `config.py`).
 3. When the answer is complete, the bot sends the **final message** (`sendRichMessage`). Drafts are temporary, so this is the message that stays in the chat and is saved in the database.
 
 Notes:
@@ -169,7 +165,7 @@ pip install -r requirements.txt
 # 3. Create a .env file (see "Environment variables" below)
 
 # 4. Run the bot
-python bot.py
+python main.py
 ```
 
 ## Environment variables
