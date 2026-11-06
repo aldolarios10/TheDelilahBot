@@ -10,7 +10,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # oculta el log de cada pe
 
 
 def main():
-    """Arranca el bot. Solo se ejecuta al correr `python bot.py`, no al importar este archivo."""
+    """Arranca el bot. Solo se ejecuta al correr `python main.py`, no al importar este archivo."""
     config.validar()  # se detiene si falta algo en el .env
     db.init_db()  # crea las tablas si no existen
 
