@@ -7,7 +7,7 @@ import config
 from config import (
     TOKEN, GROQ_API_KEY, GROQ_MODEL, MAX_TOKENS, HISTORY_LIMIT, TELEGRAM_LIMIT, DRAFT_INTERVAL,
 )
-import db
+from storage import db
 from telegram_rich import enviar_rich, enviar_borrador, RICH_LIMIT
 
 logging.basicConfig(level=logging.INFO)

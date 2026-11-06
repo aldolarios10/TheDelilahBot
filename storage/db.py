@@ -3,10 +3,11 @@
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 
-# El archivo se crea junto a este script, sin importar desde dónde se ejecute el bot
-DB_PATH = Path(__file__).parent / "delilah.db"
+import config
+
+# La ruta viene de config.py (raíz del proyecto), sin importar desde dónde se ejecute el bot
+DB_PATH = config.DB_PATH
 
 
 @contextmanager
