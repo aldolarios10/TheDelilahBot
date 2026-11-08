@@ -1,5 +1,7 @@
 """Identidad de Delilah y armado de los mensajes que se le mandan a la IA."""
 
+import re
+
 # Identidad de Delilah y formato de tutor (Correction → Explanation → Reply).
 # Se manda al inicio de cada petición a la IA. Los encabezados deben coincidir con los
 # que busca el código para separar las secciones.
@@ -29,10 +31,52 @@ For EVERY user message, answer with these sections, in this order, with these ex
 """
 
 
+# Reconoce una línea que es solo un encabezado de sección, con o sin emoji, negritas, "#" o ":".
+# Ej.: "**✍️ Correction**", "✍️ **Correction**", "## Correction", "Correction:"
+_ENCABEZADO = re.compile(
+    r"^\s*(?:#+\s*)?(?:\*\*)?\s*(?:[^\w\s*]+\s*)?(?:\*\*)?\s*"
+    r"(correction|explanation|reply)"
+    r"\s*:?\s*(?:\*\*)?\s*:?\s*$",
+    re.IGNORECASE,
+)
+
+
+def separar_secciones(texto):
+    """Separa una respuesta de Delilah en sus secciones.
+
+    Devuelve un diccionario solo con las secciones encontradas, por ejemplo
+    {"correction": "...", "explanation": "...", "reply": "..."}. Si el texto no tiene
+    encabezados (por ejemplo, un mensaje de antes del formato de tutor), devuelve {}.
+    """
+    secciones = {}
+    actual = None
+    for linea in texto.splitlines():
+        encontrado = _ENCABEZADO.match(linea)
+        if encontrado:
+            actual = encontrado.group(1).lower()
+            secciones[actual] = []
+        elif actual:
+            secciones[actual].append(linea)
+    return {nombre: "\n".join(lineas).strip() for nombre, lineas in secciones.items()}
+
+
+def extraer_reply(texto):
+    """Devuelve solo la parte del Reply. Si no la encuentra, devuelve el texto completo."""
+    return separar_secciones(texto).get("reply") or texto
+
+
 def construir_mensajes(historial, pregunta):
-    """Arma la lista que se le manda a la IA: identidad + historial + pregunta nueva."""
+    """Arma la lista que se le manda a la IA: identidad + historial + pregunta nueva.
+
+    De las respuestas anteriores de Delilah solo se manda el Reply (sin Correction ni
+    Explanation), para gastar menos tokens. En la base de datos se guarda la respuesta completa.
+    """
+    historial_corto = [
+        {"role": m["role"], "content": extraer_reply(m["content"])} if m["role"] == "assistant" else m
+        for m in historial
+    ]
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        *historial,
+        *historial_corto,
         {"role": "user", "content": pregunta},
     ]
