@@ -48,6 +48,13 @@ def init_db():
                 created_at          TEXT    NOT NULL
             );
 
+            -- Mensajes extra de Telegram de una misma respuesta (cuando se manda en varios).
+            -- El primero sigue en messages.telegram_message_id.
+            CREATE TABLE IF NOT EXISTS message_parts (
+                telegram_message_id INTEGER NOT NULL,
+                message_id          INTEGER NOT NULL REFERENCES messages(id)
+            );
+
             -- Buscar rápido la conversación activa de un chat
             CREATE INDEX IF NOT EXISTS idx_conversations_chat
                 ON conversations (chat_id, is_active);
@@ -59,6 +66,10 @@ def init_db():
             -- Encontrar rápido un mensaje de Telegram (para el reply)
             CREATE INDEX IF NOT EXISTS idx_messages_telegram
                 ON messages (telegram_message_id);
+
+            -- Encontrar rápido las partes extra de una respuesta (para el reply)
+            CREATE INDEX IF NOT EXISTS idx_message_parts_telegram
+                ON message_parts (telegram_message_id);
         """)
 
 
@@ -93,15 +104,21 @@ def start_new_conversation(chat_id):
 def find_conversation_by_message(chat_id, telegram_message_id):
     """Devuelve el id de la conversación a la que pertenece un mensaje de Telegram, o None.
 
-    Se filtra por chat_id porque Telegram solo garantiza que el message_id sea único dentro de un chat.
+    Busca tanto el mensaje principal como las partes extra de una respuesta. Se filtra por
+    chat_id porque Telegram solo garantiza que el message_id sea único dentro de un chat.
     """
     with _connect() as conn:
         fila = conn.execute(
             "SELECT m.conversation_id FROM messages m "
             "JOIN conversations c ON c.id = m.conversation_id "
             "WHERE c.chat_id = ? AND m.telegram_message_id = ? "
+            "UNION ALL "
+            "SELECT m.conversation_id FROM message_parts p "
+            "JOIN messages m ON m.id = p.message_id "
+            "JOIN conversations c ON c.id = m.conversation_id "
+            "WHERE c.chat_id = ? AND p.telegram_message_id = ? "
             "LIMIT 1",
-            (chat_id, telegram_message_id),
+            (chat_id, telegram_message_id, chat_id, telegram_message_id),
         ).fetchone()
         return fila["conversation_id"] if fila else None
 
@@ -115,13 +132,21 @@ def activate_conversation(chat_id, conversation_id):
         )
 
 
-def save_message(conversation_id, role, content, telegram_message_id=None):
-    """Guarda un mensaje ('user' o 'assistant') en una conversación."""
+def save_message(conversation_id, role, content, telegram_message_id=None, ids_extra=()):
+    """Guarda un mensaje ('user' o 'assistant') en una conversación.
+
+    Si la respuesta se mandó en varios mensajes de Telegram, `telegram_message_id` es el
+    primero e `ids_extra` los demás. Se guarda todo junto: si algo falla, no se guarda nada.
+    """
     with _connect() as conn:
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO messages (conversation_id, role, content, telegram_message_id, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (conversation_id, role, content, telegram_message_id, _now()),
+        )
+        conn.executemany(
+            "INSERT INTO message_parts (telegram_message_id, message_id) VALUES (?, ?)",
+            [(id_extra, cursor.lastrowid) for id_extra in ids_extra],
         )
 
 
