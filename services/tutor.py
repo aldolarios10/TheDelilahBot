@@ -66,6 +66,52 @@ def extraer_reply(texto):
     return separar_secciones(texto).get("reply") or texto
 
 
+# Encabezados que se muestran en sus mensajes separados (el Reply va sin encabezado)
+_TITULOS = {"correction": "**✍️ Correction**", "explanation": "**📝 Explanation**"}
+
+
+def _se_puede_dividir(texto):
+    """Dice si la respuesta está bien formada: sin texto antes del primer encabezado ni encabezados repetidos."""
+    vistos = []
+    for linea in texto.splitlines():
+        encontrado = _ENCABEZADO.match(linea)
+        if encontrado:
+            vistos.append(encontrado.group(1).lower())
+        elif linea.strip() and not vistos:
+            return False  # hay texto antes del primer encabezado y se perdería al separar
+    return bool(vistos) and len(vistos) == len(set(vistos))
+
+
+def dividir_respuesta(texto):
+    """Devuelve la lista de mensajes a enviar, en orden: Reply, Correction y Explanation.
+
+    Las secciones vacías no se incluyen. Si la respuesta no se puede dividir sin perder
+    texto, devuelve el texto completo como un solo mensaje.
+    """
+    if not _se_puede_dividir(texto):
+        return [texto]
+    secciones = separar_secciones(texto)
+    partes = [secciones["reply"]] if secciones.get("reply") else []
+    partes += [f"{titulo}\n\n{secciones[nombre]}" for nombre, titulo in _TITULOS.items() if secciones.get(nombre)]
+    return partes or [texto]
+
+
+def texto_para_borrador(texto):
+    """Del texto que va llegando, devuelve lo que se muestra en vivo: solo el Reply.
+
+    La última línea se omite si empieza con un símbolo, porque puede ser un encabezado que
+    apenas se está escribiendo. Si la respuesta no trae encabezados, devuelve lo que haya.
+    Puede devolver "" cuando todavía no hay nada que mostrar.
+    """
+    lineas = texto.split("\n")
+    ultima = lineas[-1].lstrip()
+    if ultima and not ultima[0].isalnum():
+        lineas.pop()
+    completo = "\n".join(lineas)
+    secciones = separar_secciones(completo)
+    return secciones.get("reply", "") if secciones else completo.strip()
+
+
 def construir_mensajes(historial, pregunta):
     """Arma la lista que se le manda a la IA: identidad + historial + pregunta nueva.
 
