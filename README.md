@@ -18,7 +18,7 @@ The bot's name is **Delilah**, an English tutor and conversation partner. Her id
 
 - **Who she is:** Delilah, an English tutor on Telegram.
 - **Purpose:** help the user improve their written English through natural conversation on any topic.
-- **Style:** English only, clear, concise and simple.
+- **Style:** English only, clear, concise and adapted to the user's level (see [English levels](#english-levels)).
 - **Honesty:** she introduces herself as Delilah, but if asked, she says she is an AI. She never pretends to be a real person.
 
 The name shown at the top of the Telegram chat is set separately in [@BotFather](https://t.me/BotFather) (`/setname`).
@@ -27,7 +27,7 @@ The name shown at the top of the Telegram chat is set separately in [@BotFather]
 
 1. I send Delilah a message on Telegram (in English, or in Spanish if I don't know how to say something).
 2. She answers in three parts, each in its own Telegram message, in this order (first the conversation, then my mistakes and why):
-   - **💬 Reply:** her response to the conversation, in simple English, ending with a question to keep the chat going.
+   - **💬 Reply:** her response to the conversation, written at my level, ending with a question to keep the chat going.
    - **✍️ Correction:** my message rewritten correctly, with every changed word in **bold**, plus a *More natural:* version when a native speaker would say it differently.
    - **📝 Explanation:** one short bullet per mistake: what was wrong and why.
 3. The whole conversation is saved, so she has context and can pick up topics again in later messages.
@@ -69,7 +69,7 @@ Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
 - 🧠 **Memory and history:** the tutor remembers past conversations and who I am (interests, topics, job).
 - 📊 **Mistake tracking:** a log of my mistakes to find the most frequent ones.
 - 🔁 **Reviews:** a periodic summary of my common mistakes, with examples to practice.
-- 🎚️ **Adjustable level:** from A2 to B1, B2 and beyond as I improve.
+- 🎚️ **Adjustable level:** from A2 to B1, B2 and C1 as I improve, chosen in `/settings`.
 
 ## Architecture (high level)
 
@@ -82,7 +82,7 @@ Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
                         └───────── history, profile, mistakes ────┘
 ```
 
-**Current state:** the bot answers with AI as Delilah (see [Identity](#identity)) and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Every answer uses the tutor format: Reply, Correction and Explanation (see [How it works](#how-it-works)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The user profile, mistake tracking and adjustable level are still pending.
+**Current state:** the bot answers with AI as Delilah (see [Identity](#identity)) and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Every answer uses the tutor format: Reply, Correction and Explanation (see [How it works](#how-it-works)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). Delilah adapts to each person's English level (see [English levels](#english-levels)). The user profile and mistake tracking are still pending.
 
 Planned message flow:
 
@@ -99,13 +99,13 @@ Planned message flow:
 |---|---|---|
 | Messaging interface | Telegram, via [`python-telegram-bot`](https://python-telegram-bot.org) (polling) | ✅ Working (text messages only) |
 | Configuration | `.env` file loaded with `python-dotenv` (see [Environment variables](#environment-variables)) | ✅ Working |
-| Commands menu | Registered with `set_my_commands` on startup | ✅ Working (`/new`, `/start`) |
+| Commands menu | Registered with `set_my_commands` on startup | ✅ Working (`/new`, `/settings`, `/start`) |
 | AI model | [Groq](https://console.groq.com) free tier, via the `groq` Python SDK | ✅ Working (with conversation history and streaming) |
 | Rich formatting and live typing | Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage) (Bot API 10.1+), managed in `telegram_rich.py` | ✅ Working (with plain text fallback) |
 | Database: conversations and messages | SQLite (`delilah.db`), managed in `storage/db.py` | ✅ Working |
 | Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
 | Tutor format (Reply / Correction / Explanation) | `SYSTEM_PROMPT` and section parsing in `services/tutor.py` | ✅ Working |
-| Adjustable level (`/level`) | Prompt + user setting | ⏳ Pending (fixed at simple English for now) |
+| Adjustable level | `users` table, instructions per level in `services/levels.py`, `/settings` menu in `handlers/settings.py` | ✅ Working (A2, B1, B2, C1) |
 
 ### Project structure
 
@@ -116,14 +116,16 @@ TheDelilahBot/
 ├── main.py                  ← starts the bot: python main.py
 ├── config.py                ← reads .env, constants and validation
 ├── handlers/                ← Telegram side: receives messages and replies
-│   ├── commands.py          ← /start, /new and the commands menu (later /level, /review)
+│   ├── commands.py          ← /start, /new and the commands menu (later /review)
+│   ├── settings.py          ← /settings menu and its buttons
 │   └── messages.py          ← text messages, live drafts, sending the answer
 ├── services/                ← logic, knows nothing about Telegram
 │   ├── ai.py                ← Groq calls with streaming
+│   ├── levels.py            ← English levels, their instructions for the AI, each person's level
 │   ├── tutor.py             ← Delilah's identity and tutor format (SYSTEM_PROMPT), section parsing, messages for the AI
 │   └── conversations.py     ← which conversation a message belongs to (active or reply)
 ├── storage/
-│   └── db.py                ← SQLite database: conversations, messages and their Telegram ids
+│   └── db.py                ← SQLite database: conversations, messages, their Telegram ids and users
 ├── telegram_rich.py         ← Telegram Rich Messages and drafts (via do_api_request)
 └── delilah.db               ← the database file (created automatically, ignored by git)
 ```
@@ -141,7 +143,25 @@ The commands appear in Telegram's **☰ Menu** button (next to the text box) and
 | Command | What it does |
 |---|---|
 | `/new` | Starts a new conversation. The previous one stays saved, but it's no longer sent to the AI. |
-| `/start` | Shows the welcome message. |
+| `/settings` | Opens the settings menu, where you choose your English level. |
+| `/start` | Shows the welcome message and your current level. |
+
+## English levels
+
+Each person has their own English level: **A2** (the default), **B1**, **B2** or **C1**. To change it, use `/settings` → **Level** and tap one of the options; the menu works with buttons in a single message and doesn't go through the AI.
+
+The level is saved per person in the `users` table, by Telegram user id. It stays the same after `/new`, when resuming an old conversation and after restarting the bot. In a group, each person's own level is used.
+
+The AI receives only the instructions for that person's level (`NIVELES` in `services/levels.py`):
+
+| Level | Reply | *More natural* | Explanation |
+|---|---|---|---|
+| **A2** | Short sentences, common words, basic tenses, no idioms | Simple, no idioms | Very simple words, no grammar terms, one short example |
+| **B1** | Connected sentences, everyday vocabulary, common tenses | Common everyday expressions | Names the grammar rule briefly |
+| **B2** | Varied sentences and vocabulary, common idioms | Natural collocations and common idioms | The rule and why it applies here |
+| **C1** | Fluent, natural, complex and idiomatic | Nuance, register and idiomatic phrasing | Nuances of usage and tone |
+
+**Every mistake is corrected at every level.** The level changes how Delilah writes and explains, not which mistakes she corrects. The only addition is at C1, where problems of tone or register also count as mistakes.
 
 ## Conversations
 
