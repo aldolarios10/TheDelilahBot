@@ -1,13 +1,15 @@
-"""Comandos de Telegram: /start, /new y el menú de comandos."""
+"""Comandos de Telegram: /start, /new y el menú de comandos (/settings está en handlers/settings.py)."""
 
 from telegram import Update, BotCommand
 from telegram.ext import ContextTypes
 
+from services import levels
 from storage import db
 
 # Comandos que aparecen en el botón "Menu" de Telegram (y como sugerencias al escribir "/")
 COMANDOS = [
     BotCommand("new", "Start a new conversation"),
+    BotCommand("settings", "Change your settings"),
     BotCommand("start", "Show the welcome message"),
 ]
 
@@ -18,10 +20,12 @@ async def registrar_comandos(app):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nivel = levels.nivel_de_usuario(update.effective_user.id)
     await update.message.reply_text(
         "Hi! I'm Delilah, your English tutor. 👋\n"
         "Write to me in English about anything, and I'll help you improve.\n"
-        "I remember our conversation. Use /new (or the Menu button) to start a new one."
+        "I remember our conversation. Use /new (or the Menu button) to start a new one.\n"
+        f"Your level is {nivel}. Use /settings to change it."
     )
 
 
