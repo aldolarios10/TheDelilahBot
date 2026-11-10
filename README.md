@@ -26,7 +26,7 @@ The name shown at the top of the Telegram chat is set separately in [@BotFather]
 ## How it works
 
 1. I send Delilah a message on Telegram (in English, or in Spanish if I don't know how to say something).
-2. She answers in three parts, in this order (first the conversation, then my mistakes and why):
+2. She answers in three parts, each in its own Telegram message, in this order (first the conversation, then my mistakes and why):
    - **💬 Reply:** her response to the conversation, in simple English, ending with a question to keep the chat going.
    - **✍️ Correction:** my message rewritten correctly, with every changed word in **bold**, plus a *More natural:* version when a native speaker would say it differently.
    - **📝 Explanation:** one short bullet per mistake: what was wrong and why.
@@ -123,7 +123,7 @@ TheDelilahBot/
 │   ├── tutor.py             ← Delilah's identity and tutor format (SYSTEM_PROMPT), section parsing, messages for the AI
 │   └── conversations.py     ← which conversation a message belongs to (active or reply)
 ├── storage/
-│   └── db.py                ← SQLite database: conversations and messages
+│   └── db.py                ← SQLite database: conversations, messages and their Telegram ids
 ├── telegram_rich.py         ← Telegram Rich Messages and drafts (via do_api_request)
 └── delilah.db               ← the database file (created automatically, ignored by git)
 ```
@@ -147,10 +147,11 @@ The commands appear in Telegram's **☰ Menu** button (next to the text box) and
 
 - **Each chat is separate.** Every Telegram chat has its own conversations; they never mix.
 - **One active conversation per chat.** Normal messages go to the active conversation. If there isn't one, it's created automatically.
-- **Resume an old conversation with a reply.** Reply (swipe or long-press → *Reply*) to an old message, and the bot continues *that* conversation. It becomes the active one, so your next messages go there too.
+- **Resume an old conversation with a reply.** Reply (swipe or long-press → *Reply*) to an old message (any of them: my message, the Reply, the Correction or the Explanation), and the bot continues *that* conversation. It becomes the active one, so your next messages go there too.
 - **Limited context.** Only the last `HISTORY_LIMIT` messages (default 10) are sent to the AI, to stay under the free tier's token limits. Older messages stay saved in the database.
 - **Only the Reply goes back to the AI.** The database keeps Delilah's full answers, but in the history sent to the AI her previous answers include only the **Reply** section (not Correction or Explanation). This saves tokens and keeps the conversation focused. The sections are found by their headings (`separar_secciones()` in `services/tutor.py`); answers without headings, like the ones from before the tutor format, are sent complete.
-- **Errors aren't saved.** If the AI fails, nothing is stored, so you can just send your message again.
+- **One answer, one database row.** Although an answer arrives in several Telegram messages, it's saved complete in a single row of `messages`. The first Telegram id stays in that row and the others go in the `message_parts` table, so a reply to any of them finds the conversation.
+- **Errors aren't saved.** If the AI fails, or no part of the answer reaches Telegram, nothing is stored, so you can just send your message again. If at least one part arrives, the complete answer is saved.
 
 The database is the file `delilah.db`, created automatically in the project root (`DB_PATH` in `config.py`) the first time the bot runs. It's ignored by git, so your conversations are never uploaded.
 
@@ -161,13 +162,16 @@ AI models write in Markdown (`**bold**`, `# headings`, lists, tables). Regular T
 How an answer is sent:
 
 1. The bot asks Groq for the answer in **streaming** mode, so the text arrives in small pieces.
-2. While it arrives, the bot shows it as a **draft** (`sendRichMessageDraft`): you see the answer being typed in real time. Drafts are updated at most once per second (`DRAFT_INTERVAL` in `config.py`).
-3. When the answer is complete, the bot sends the **final message** (`sendRichMessage`). Drafts are temporary, so this is the message that stays in the chat and is saved in the database.
+2. While it arrives, the bot shows the **Reply** as a **draft** (`sendRichMessageDraft`): you see it being typed in real time. Drafts are updated at most once per second (`DRAFT_INTERVAL` in `config.py`).
+3. When the answer is complete, the bot splits it by section (`dividir_respuesta()` in `services/tutor.py`) and sends the **final messages** (`sendRichMessage`) in order: the Reply without a heading, then **✍️ Correction** and **📝 Explanation** with theirs. Drafts are temporary, so these are the messages that stay in the chat.
 
 Notes:
 
-- **Drafts only work in private chats.** In groups, the bot just sends the final message.
-- **Fallbacks:** if a draft fails, the bot stops sending drafts for that answer but still sends the final message. If the final rich message fails, the answer is sent as plain text (split into 4096-character messages). Errors are logged in the console.
+- **Separate messages:** there's a short pause between them (`PAUSA_ENTRE_MENSAJES` in `config.py`), and only the first one triggers a notification. Empty sections aren't sent. If there's no Explanation, the answer is two messages.
+- **When the answer can't be split:** if it has no headings, has text before the first heading or repeats a heading, it's sent as a single message so nothing is lost.
+- **Cut-off answers:** the *answer cut off* note appears at the end of the last message.
+- **Drafts only work in private chats.** In groups, the bot just sends the final messages.
+- **Fallbacks:** if a draft fails, the bot stops sending drafts for that answer but still sends the final messages. If a rich message fails, that part is sent as plain text (split into 4096-character messages) and the remaining parts are still sent. Errors are logged in the console.
 - **Library support:** `python-telegram-bot` doesn't include Rich Messages yet, so `telegram_rich.py` calls them with `do_api_request`, the library's way to use newer Bot API methods.
 - **Telegram app:** Rich Messages are recent (Bot API 10.1, June 2026), so keep your Telegram app updated.
 
