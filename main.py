@@ -14,6 +14,7 @@ def main():
     """Arranca el bot. Solo se ejecuta al correr `python main.py`, no al importar este archivo."""
     config.validar()  # se detiene si falta algo en el .env
     db.init_db()  # crea las tablas si no existen
+    logging.info("Base de datos: %s", db.DB_PATH)  # en Railway debe apuntar al volumen
 
     app = ApplicationBuilder().token(config.TOKEN).post_init(registrar_comandos).build()
     app.add_handler(CommandHandler("start", start))                                # responde a /start

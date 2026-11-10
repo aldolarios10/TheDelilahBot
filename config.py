@@ -17,7 +17,8 @@ HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", "10"))  # mensajes anteriores que
 TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
 DRAFT_INTERVAL = 1.0   # segundos mínimos entre borradores (para no saturar a Telegram)
 PAUSA_ENTRE_MENSAJES = 0.4  # segundos entre los mensajes de una misma respuesta
-DB_PATH = Path(__file__).parent / "delilah.db"  # la base de datos vive en la raíz del proyecto
+# En Railway la base va en el volumen (esa variable la crea Railway); en la PC, en la raíz del proyecto
+DB_PATH = Path(os.getenv("RAILWAY_VOLUME_MOUNT_PATH") or Path(__file__).parent) / "delilah.db"
 
 
 def validar():
