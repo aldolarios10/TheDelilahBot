@@ -55,6 +55,13 @@ def init_db():
                 message_id          INTEGER NOT NULL REFERENCES messages(id)
             );
 
+            -- Datos de cada persona, que no dependen del chat ni de la conversación
+            CREATE TABLE IF NOT EXISTS users (
+                user_id     INTEGER PRIMARY KEY,
+                level       TEXT    NOT NULL,
+                updated_at  TEXT    NOT NULL
+            );
+
             -- Buscar rápido la conversación activa de un chat
             CREATE INDEX IF NOT EXISTS idx_conversations_chat
                 ON conversations (chat_id, is_active);
@@ -161,3 +168,20 @@ def get_history(conversation_id, limit):
             (conversation_id, limit),
         ).fetchall()
     return [{"role": f["role"], "content": f["content"]} for f in reversed(filas)]
+
+
+def obtener_nivel(user_id):
+    """Devuelve el nivel guardado de una persona, o None si todavía no ha elegido uno."""
+    with _connect() as conn:
+        fila = conn.execute("SELECT level FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    return fila["level"] if fila else None
+
+
+def guardar_nivel(user_id, nivel):
+    """Guarda el nivel de una persona. Si ya tenía uno, lo reemplaza."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (user_id, level, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT (user_id) DO UPDATE SET level = excluded.level, updated_at = excluded.updated_at",
+            (user_id, nivel, _now()),
+        )
