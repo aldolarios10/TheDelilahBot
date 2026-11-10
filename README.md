@@ -26,20 +26,20 @@ The name shown at the top of the Telegram chat is set separately in [@BotFather]
 ## How it works
 
 1. I send Delilah a message on Telegram (in English, or in Spanish if I don't know how to say something).
-2. She answers in three parts, in this order (first I see my mistakes, then why, then the conversation continues):
+2. She answers in three parts, in this order (first the conversation, then my mistakes and why):
+   - **💬 Reply:** her response to the conversation, in simple English, ending with a question to keep the chat going.
    - **✍️ Correction:** my message rewritten correctly, with every changed word in **bold**, plus a *More natural:* version when a native speaker would say it differently.
    - **📝 Explanation:** one short bullet per mistake: what was wrong and why.
-   - **💬 Reply:** her response to the conversation, in simple English, ending with a question to keep the chat going.
 3. The whole conversation is saved, so she has context and can pick up topics again in later messages.
 
 Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
 
 | Case | What Delilah does |
 |---|---|
-| Message with mistakes | Correction (+ *More natural* if needed), Explanation and Reply |
-| No mistakes and it sounds natural | Only *"Perfect! No mistakes. 🎉"* (no Explanation) and Reply |
-| No mistakes but it could sound more natural | *"No mistakes! 🎉"* + *More natural:* (no Explanation) and Reply |
-| Message in Spanish | *In English:* version of what I meant, Explanation of 1–3 key words or structures, and Reply |
+| Message with mistakes | Reply, Correction (+ *More natural* if needed) and Explanation |
+| No mistakes and it sounds natural | Reply and only *"Perfect! No mistakes. 🎉"* (no Explanation) |
+| No mistakes but it could sound more natural | Reply and *"No mistakes! 🎉"* + *More natural:* (no Explanation) |
+| Message in Spanish | Reply, *In English:* version of what I meant, and Explanation of 1–3 key words or structures |
 
 - **Corrected:** grammar, vocabulary, spelling and the capital "I".
 - **Not corrected:** minor chat punctuation (missing final period, optional commas), unless it changes the meaning.
@@ -51,6 +51,9 @@ Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
 >
 > **Delilah:**
 >
+> **💬 Reply**
+> That sounds fun! Horror movies are exciting. Were you scared? What was the name of the movie?
+>
 > **✍️ Correction**
 > Yesterday I **went** to the cinema with my friends and we **watched** a horror movie.
 > *More natural:* Yesterday I went to the movies with my friends and we watched a horror film.
@@ -58,9 +61,6 @@ Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
 > **📝 Explanation**
 > - **go → went:** "yesterday" means past tense, and "go" is an irregular verb.
 > - **watch → watched:** regular verb, add *-ed*.
->
-> **💬 Reply**
-> That sounds fun! Horror movies are exciting. Were you scared? What was the name of the movie?
 
 ## Planned features
 
@@ -82,14 +82,14 @@ Tutor rules (defined in `SYSTEM_PROMPT`, `services/tutor.py`):
                         └───────── history, profile, mistakes ────┘
 ```
 
-**Current state:** the bot answers with AI as Delilah (see [Identity](#identity)) and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Every answer uses the tutor format: Correction, Explanation and Reply (see [How it works](#how-it-works)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The user profile, mistake tracking and adjustable level are still pending.
+**Current state:** the bot answers with AI as Delilah (see [Identity](#identity)) and remembers the conversation. Each chat has its own conversations, saved in a SQLite database, and the last messages are sent to Groq as context (see [Conversations](#conversations)). Every answer uses the tutor format: Reply, Correction and Explanation (see [How it works](#how-it-works)). Answers are streamed in real time and shown with rich formatting (see [Formatting and streaming](#formatting-and-streaming)). The user profile, mistake tracking and adjustable level are still pending.
 
 Planned message flow:
 
 1. The user sends a message on Telegram.
 2. The bot (`handlers/messages.py`) receives it through the Telegram Bot API.
 3. The bot loads the user's recent history and profile from the database.
-4. It sends the message plus that context to the AI model, with instructions to answer in the *Correction / Explanation / Reply* format, in English only.
+4. It sends the message plus that context to the AI model, with instructions to answer in the *Reply / Correction / Explanation* format, in English only.
 5. It saves the new message, the answer and the detected mistakes to the database.
 6. It sends the answer back to the user on Telegram.
 
@@ -104,7 +104,7 @@ Planned message flow:
 | Rich formatting and live typing | Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage) (Bot API 10.1+), managed in `telegram_rich.py` | ✅ Working (with plain text fallback) |
 | Database: conversations and messages | SQLite (`delilah.db`), managed in `storage/db.py` | ✅ Working |
 | Database: user profile and mistakes | SQLite (new tables) | ⏳ Pending |
-| Tutor format (Correction / Explanation / Reply) | `SYSTEM_PROMPT` and section parsing in `services/tutor.py` | ✅ Working |
+| Tutor format (Reply / Correction / Explanation) | `SYSTEM_PROMPT` and section parsing in `services/tutor.py` | ✅ Working |
 | Adjustable level (`/level`) | Prompt + user setting | ⏳ Pending (fixed at simple English for now) |
 
 ### Project structure
