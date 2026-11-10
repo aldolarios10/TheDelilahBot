@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 
 from config import HISTORY_LIMIT, TELEGRAM_LIMIT, DRAFT_INTERVAL, PAUSA_ENTRE_MENSAJES
 from storage import db
-from services import ai, tutor
+from services import ai, levels, tutor
 from services.conversations import elegir_conversacion
 from telegram_rich import enviar_rich, enviar_borrador, RICH_LIMIT
 
@@ -77,7 +77,8 @@ async def generar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             usar_borradores = False
         ultimo_borrador = time.monotonic()
 
-    mensajes = tutor.construir_mensajes(historial, pregunta)
+    nivel = levels.nivel_de_usuario(update.effective_user.id)  # el nivel es de quien escribe
+    mensajes = tutor.construir_mensajes(historial, pregunta, nivel)
     return await ai.generar(mensajes, al_avanzar)
 
 

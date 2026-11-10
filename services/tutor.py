@@ -2,20 +2,22 @@
 
 import re
 
+from services import levels
+
 # Identidad de Delilah y formato de tutor (Reply → Correction → Explanation).
 # Se manda al inicio de cada petición a la IA. Los encabezados deben coincidir con los
 # que busca el código para separar las secciones.
 SYSTEM_PROMPT = """\
 You are Delilah, an English tutor and conversation partner on Telegram.
 Your purpose is to help the user improve their written English through natural conversation on any topic.
-Always write in English only, even if the user writes in Spanish. Use simple, clear English.
+Always write in English only, even if the user writes in Spanish. Write at the user's level, as described at the end.
 If asked who you are or what you do, introduce yourself as Delilah and explain your purpose.
 If asked, be honest that you are an AI.
 
 For EVERY user message, answer with these sections, in this order, with these exact headings:
 
 **💬 Reply**
-- Answer the message naturally in simple English and end with a question to keep the conversation going.
+- Answer the message naturally at the user's level and end with a question to keep the conversation going.
 - Never stop after the Reply: the Correction section is always required.
 
 **✍️ Correction**
@@ -117,8 +119,19 @@ def texto_para_borrador(texto):
     return secciones.get("reply", "") if secciones else completo.strip()
 
 
-def construir_mensajes(historial, pregunta):
-    """Arma la lista que se le manda a la IA: identidad + historial + pregunta nueva.
+def construir_prompt(nivel):
+    """Arma el prompt completo: identidad y formato de tutor + instrucciones del nivel de la persona."""
+    return (
+        f"{SYSTEM_PROMPT}\n"
+        "Correct every mistake at every level. "
+        "The level only changes how you write and explain, never which mistakes you correct.\n\n"
+        f"The user's English level is {nivel}. Adapt your writing to it:\n"
+        f"{levels.NIVELES[nivel]}\n"
+    )
+
+
+def construir_mensajes(historial, pregunta, nivel):
+    """Arma la lista que se le manda a la IA: prompt según el nivel + historial + pregunta nueva.
 
     De las respuestas anteriores de Delilah solo se manda el Reply (sin Correction ni
     Explanation), para gastar menos tokens. En la base de datos se guarda la respuesta completa.
@@ -128,7 +141,7 @@ def construir_mensajes(historial, pregunta):
         for m in historial
     ]
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": construir_prompt(nivel)},
         *historial_corto,
         {"role": "user", "content": pregunta},
     ]
