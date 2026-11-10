@@ -27,9 +27,10 @@ async def enviar_borrador(bot, chat_id, draft_id, markdown):
     )
 
 
-async def enviar_rich(bot, chat_id, markdown):
+async def enviar_rich(bot, chat_id, markdown, silencioso=False):
     """Manda `markdown` como rich message (Telegram interpreta **negritas**, listas, tablas, etc.).
 
+    Con `silencioso=True` el mensaje llega sin sonido ni vibración.
     Devuelve el Message enviado. Si Telegram lo rechaza, lanza una excepción
     (quien llama decide qué hacer, por ejemplo mandarlo como texto normal).
     """
@@ -38,6 +39,7 @@ async def enviar_rich(bot, chat_id, markdown):
         api_kwargs={
             "chat_id": chat_id,
             "rich_message": {"markdown": markdown},
+            "disable_notification": silencioso,
         },
         return_type=Message,
     )

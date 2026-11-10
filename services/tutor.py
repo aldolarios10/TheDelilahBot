@@ -96,16 +96,21 @@ def dividir_respuesta(texto):
     return partes or [texto]
 
 
+def _puede_ser_encabezado(linea):
+    """Dice si una línea incompleta todavía podría terminar siendo un encabezado de sección."""
+    letras = re.sub(r"[^a-z]", "", linea.lower())
+    return any(nombre.startswith(letras) for nombre in ("correction", "explanation", "reply"))
+
+
 def texto_para_borrador(texto):
     """Del texto que va llegando, devuelve lo que se muestra en vivo: solo el Reply.
 
-    La última línea se omite si empieza con un símbolo, porque puede ser un encabezado que
-    apenas se está escribiendo. Si la respuesta no trae encabezados, devuelve lo que haya.
-    Puede devolver "" cuando todavía no hay nada que mostrar.
+    La última línea se omite si puede ser un encabezado que apenas se está escribiendo.
+    Si la respuesta no trae encabezados, devuelve lo que haya. Puede devolver "" cuando
+    todavía no hay nada que mostrar.
     """
     lineas = texto.split("\n")
-    ultima = lineas[-1].lstrip()
-    if ultima and not ultima[0].isalnum():
+    if lineas[-1].strip() and _puede_ser_encabezado(lineas[-1]):
         lineas.pop()
     completo = "\n".join(lineas)
     secciones = separar_secciones(completo)

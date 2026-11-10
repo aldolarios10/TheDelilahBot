@@ -16,6 +16,7 @@ HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", "10"))  # mensajes anteriores que
 # --- Constantes ---
 TELEGRAM_LIMIT = 4096  # máximo de caracteres por mensaje en Telegram
 DRAFT_INTERVAL = 1.0   # segundos mínimos entre borradores (para no saturar a Telegram)
+PAUSA_ENTRE_MENSAJES = 0.4  # segundos entre los mensajes de una misma respuesta
 DB_PATH = Path(__file__).parent / "delilah.db"  # la base de datos vive en la raíz del proyecto
 
 
